@@ -1,0 +1,107 @@
+# =============================================================
+#  Configuración del pipeline (arquitectura medallón)
+#  Cambia SOLO este archivo cuando uses tu dataset de Kaggle.
+# =============================================================
+
+project:
+  name: "pipeline_medallon"
+  description: "Extracción (bronze) y transformación (silver) con EDA"
+
+# ---------- Fuente de datos (lo que descargas de Kaggle) ----------
+source:
+  # Ruta relativa a la raíz del proyecto. Admite .xlsx, .xls o .csv
+  file_path: "data/source/netflix1.csv"
+  sheet_name: 0            # hoja del Excel (índice o nombre). Se ignora si es CSV
+  csv_separator: ","       # solo aplica a CSV
+  encoding: "utf-8"        # si tu CSV da error prueba "latin-1"
+
+# ---------- Capas de la arquitectura medallón ----------
+paths:
+  bronze: "data/bronze"
+  silver: "data/silver"
+  gold: "data/gold"
+  logs: "logs"
+
+output:
+  dataset_name: "netflix"  # nombre base de los archivos de salida
+  format: "parquet"        # parquet (recomendado) o csv
+
+# ---------- Reglas de limpieza (capa silver) ----------
+# Cada regla viene de un hallazgo del EDA (ver notebooks/eda.ipynb, sección 8)
+transform:
+  # Textos que significan "sin dato". En Netflix el nulo oculto es "Not Given"
+  null_values: ["", " ", "NA", "N/A", "n/a", "null", "NULL", "None", "nan", "NaN", "-", "?", "Not Given"]
+
+  # Columnas con más de este % de nulos se eliminan (director tiene ~29 %: se conserva)
+  drop_columns_null_pct: 60
+
+  # Si vienen nulas, se elimina la fila
+  required_columns: ["show_id", "title", "type"]
+
+  # Llave técnica: un show_id = un registro
+  primary_key: ["show_id"]
+
+  # Llave de negocio: mismo contenido cargado con distinto show_id (3 casos en el EDA)
+  business_key: ["type", "title", "director", "release_year"]
+
+  # "90 min" -> duration_valor = 90, duration_unidad = "minutos"
+  split_value_unit:
+    duration:
+      unit_map: {"min": "minutos", "season": "temporadas", "seasons": "temporadas"}
+      drop_original: true
+
+  # Columnas con varios valores separados por coma -> <col>_principal y <col>_cantidad
+  multi_value_columns:
+    listed_in: ","
+
+  # Tipos forzados. Lo que no esté aquí se infiere automáticamente.
+  dtypes:
+    show_id: "string"
+    type: "category"
+    title: "string"
+    director: "string"
+    country: "category"
+    date_added: "datetime"
+    release_year: "int"
+    rating: "category"
+    duration_valor: "int"
+    duration_unidad: "category"
+    listed_in: "string"
+    listed_in_principal: "category"
+    listed_in_cantidad: "int"
+
+  # Formato explícito de fechas (date_added viene como mes/día/año: 9/25/2021)
+  date_formats:
+    date_added: "%m/%d/%Y"
+
+  # Deriva <col>_anio y <col>_mes
+  date_parts: ["date_added"]
+
+  # Rangos válidos: valores fuera del rango se convierten en nulo
+  valid_ranges:
+    release_year: [1900, 2026]
+    duration_valor: [1, 400]
+
+  # Estrategia de imputación de nulos
+  impute:
+    numeric: "median"      # median | mean | zero | none
+    categorical: "unknown" # mode | unknown | none  -> director/country: no se inventa, se marca
+    unknown_label: "Desconocido"
+
+  # Normalización de texto en columnas categóricas
+  text:
+    strip: true
+    title_case: false      # false: "TV-MA" no debe volverse "Tv-Ma"
+    remove_accents_for_matching: true
+
+  # Outliers (IQR): flag = columna indicadora | remove = elimina filas | none
+  outliers:
+    method: "flag"
+    iqr_factor: 1.5
+    columns: ["duration_valor", "release_year"]
+    group_by:
+      duration_valor: "duration_unidad"   # límites distintos para minutos y temporadas
+
+  # Inconsistencias de negocio -> columna booleana (expresión de pandas)
+  business_rules:
+    lanzamiento_posterior_a_ingreso: "release_year > date_added_anio"

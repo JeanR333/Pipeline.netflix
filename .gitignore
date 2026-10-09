@@ -1,0 +1,27 @@
+# Entorno virtual
+.venv/
+venv/
+
+# Variables de entorno
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Datos generados y logs (se regeneran con python main.py)
+data/bronze/*
+data/silver/*
+data/gold/*
+!data/**/.gitkeep
+logs/*
+!logs/.gitkeep
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.vscode/
