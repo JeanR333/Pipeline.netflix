@@ -1,47 +1,3 @@
-# Pipeline de Datos con Arquitectura Medallón (Bronze → Silver) + EDA — Netflix
-
-Proyecto en Python que **extrae** el catálogo de Netflix (`netflix1.csv`, 8.790 títulos de Kaggle) a la capa **bronze**,
-lo **analiza** con un EDA en Jupyter y lo **transforma** (limpieza y tipado) hacia la capa **silver**.
-Cada ejecución queda registrada en `logs/`.
-
-```
- data/source/            data/bronze/              data/silver/
- archivo Kaggle  ──►  EXTRACCIÓN  ──►  dato crudo  ──►  TRANSFORMACIÓN  ──►  dato limpio
- (.xlsx / .csv)    extract_excel.py   (+ metadatos)    clean_excel.py      (tipos, sin nulos,
-                                                                           sin duplicados)
-                         ▲                                   ▲
-                         └───────── main.py (orquesta) ──────┘ ──► logs/ (log + reporte de calidad)
-                                    notebooks/eda.ipynb → define las reglas de limpieza
-```
-
-## Estructura del proyecto
-
-```
-proyecto_pipeline/
-├── config/
-│   └── config.yaml              # TODAS las reglas: archivo fuente, rutas, limpieza
-├── data/
-│   ├── source/                  # ← netflix1.csv (archivo original de Kaggle)
-│   ├── bronze/                  # capa 1: copia fiel del origen + metadatos
-│   ├── silver/                  # capa 2: datos limpios y tipados
-│   └── gold/                    # capa 3: (siguiente fase del curso)
-├── logs/                        # pipeline_YYYYMMDD.log + quality_report_*.json
-├── notebooks/
-│   └── eda.ipynb                # Análisis Exploratorio de Datos
-├── src/
-│   ├── utils.py                 # config, logger y funciones compartidas
-│   ├── extract/extract_excel.py # etapa de extracción  → bronze
-│   ├── transform/clean_excel.py # etapa de transformación → silver
-│   └── load/load_database.py    # etapa de carga (gold) - pendiente
-├── tests/                       # pruebas con pytest
-├── main.py                      # punto de entrada del pipeline
-├── .env                         # variables de entorno (nivel de log)
-├── .gitignore
-└── requirements.txt
-```
-
----
-
 ## Guía paso a paso en Visual Studio Code (Windows)
 
 ### Paso 0 — Requisitos
@@ -77,7 +33,7 @@ pip install -r requirements.txt
    output:
      dataset_name: "nombre_corto"
    ```
-   *(Ya viene configurado para `data/source/netflix1.csv`.)*
+   *(Mientras eliges uno, el proyecto trae `ventas_ejemplo.xlsx`, un dataset sucio de prueba).*
 
 ### Paso 4 — Ejecutar el EDA
 1. Abre `notebooks/eda.ipynb`.
@@ -122,7 +78,7 @@ Vuelve a ejecutar la **sección 9** del notebook para comparar original vs. silv
 pytest -v
 ```
 - `test_extract.py` → lectura de Excel/CSV, errores, metadatos
-- `test_transform.py` → cada regla de limpieza (incluye valor/unidad, multivalor, llave de negocio, outliers por grupo)
+- `test_transform.py` → cada regla de limpieza
 - `test_quality.py` → valida el archivo silver real (sin duplicados, llaves únicas, rangos)
 
 ---
@@ -135,26 +91,15 @@ silver, siempre se puede reprocesar desde aquí.
 
 **Silver (transformación).** En este orden:
 1. Columnas a `snake_case` sin tildes
-2. Espacios y nulos ocultos (`"Not Given"` → nulo)
+2. Espacios y nulos ocultos (`"N/A"` → nulo)
 3. Eliminación de columnas casi vacías
-4. Duplicados exactos, por llave técnica (`show_id`) y por llave de negocio (mismo título con distinto ID)
+4. Duplicados exactos y por llave primaria
 5. Unificación de categorías (`"BOGOTA"`, `" bogota "` → `"Bogotá"`)
-6. Columnas "valor + unidad": `"90 min"` → `duration_valor = 90`, `duration_unidad = "minutos"`
-7. Columnas multivalor: `listed_in` → `listed_in_principal` + `listed_in_cantidad`
-8. Conversión de tipos (`date_added` con formato `%m/%d/%Y`)
-9. Año y mes derivados de la fecha
-10. Valores fuera de rango → nulo
-11. Filas sin columnas obligatorias
-12. Imputación (`director`/`country` → `"Desconocido"`; las fechas no se inventan)
-13. Outliers por IQR, calculados **por unidad** (minutos y temporadas por separado)
-14. Reglas de negocio: `lanzamiento_posterior_a_ingreso` (año de estreno > año de ingreso)
-
-### Resultado con Netflix
-| | Original | Silver |
-|---|---|---|
-| Filas | 8.790 | 8.786 (4 duplicados de negocio eliminados) |
-| Faltantes | 0 según pandas, pero 2.875 ocultos (`"Not Given"`) | 0 (marcados como `"Desconocido"`) |
-| Columnas | 10 (9 de texto) | 21 con tipos correctos + metadatos y banderas |
+6. Conversión de tipos
+7. Valores fuera de rango → nulo
+8. Filas sin columnas obligatorias
+9. Imputación (mediana numérica, moda categórica; las fechas no se inventan)
+10. Marca de outliers por IQR
 
 ## Problemas comunes
 | Error | Solución |

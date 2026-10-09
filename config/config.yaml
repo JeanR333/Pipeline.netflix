@@ -41,7 +41,7 @@ transform:
   # Llave técnica: un show_id = un registro
   primary_key: ["show_id"]
 
-  # Llave de negocio: mismo contenido cargado con distinto show_id (3 casos en el EDA)
+  # Llave de negocio: mismo contenido cargado con distinto show_id (4 casos en el EDA)
   business_key: ["type", "title", "director", "release_year"]
 
   # "90 min" -> duration_valor = 90, duration_unidad = "minutos"
